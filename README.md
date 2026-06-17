@@ -1,78 +1,102 @@
-# Harvard-Style ATS Resume Optimizer
+# cv2job SaaS
 
-A powerful Streamlit application that helps job seekers optimize their resumes for Applicant Tracking Systems (ATS) and generate professional Harvard-style PDFs. Upload your CV and a job description, get an ATS compatibility score with keyword analysis, identify skill gaps, and receive AI-powered suggestions to tailor your resume — then download the final result as a polished one-page Harvard-format PDF.
+cv2job is a Streamlit CV optimizer backed by a FastAPI API. The UI keeps the original ATS wizard and Harvard PDF flow, while the backend owns AI keys, Stripe billing, paid sessions, and usage credits.
 
-## Features
+## Architecture
 
-- **ATS Score Dashboard** — Calculates an overall compatibility score (0–100) plus per-section scores for Skills, Experience, and Education.
-- **Keyword Analysis** — Shows which required keywords are present in your CV and which are missing.
-- **Gap Analysis & Skill Suggestions** — Uses Google AI Studio (Gemini) to identify missing skills and proposes actionable adaptations.
-- **Interactive Selection** — Choose which AI-suggested skills and framing phrases to include in your optimized resume.
-- **Harvard-Style PDF Export** — Generates a clean, one-page Harvard-format PDF with clickable hyperlinks and proper character encoding.
-- **Markdown Export** — Download the optimized resume in Markdown for further editing.
-- **Privacy-First API Handling** — Your Google AI Studio API key is entered at runtime via a password-protected input and never hardcoded.
+- **Streamlit frontend (`app.py`)**: collects CV/job inputs, keeps the existing wizard/dashboard layout, and calls FastAPI endpoints.
+- **FastAPI backend (`api/main.py`)**: authenticates owner or paid requests, routes AI calls, creates Stripe Checkout sessions, exchanges paid checkouts for session tokens, and generates PDFs.
+- **SQLite**: stores paid users, checkout records, hashed session tokens, and remaining credits.
+- **AI routing**:
+  - Owner requests use `GOOGLE_API_KEY` and `gemini-2.5-flash`.
+  - Paid requests use `OPENROUTER_API_KEY` and `google/gemma-2-9b-it`.
 
-## Installation
+## Environment
 
-1. Clone the repository and navigate into the project folder:
-   ```bash
-   git clone https://github.com/RuiRafael11/cv2job.git
-   cd cv2job
-   ```
+Copy `.env.example` to `.env` or export these variables:
 
-2. Create and activate a virtual environment (optional but recommended):
-   ```bash
-   python -m venv .venv
-   # Windows
-   .venv\Scripts\activate
-   # macOS / Linux
-   source .venv/bin/activate
-   ```
+```env
+GOOGLE_API_KEY=          # Gemini key (owner tier)
+OPENROUTER_API_KEY=      # OpenRouter key (paid tier)
+OWNER_TOKEN=             # Secret token that bypasses payment
+STRIPE_SECRET_KEY=       # Stripe secret
+STRIPE_WEBHOOK_SECRET=   # Stripe webhook
+DATABASE_URL=sqlite:///cv2job.db
+```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+Optional pricing/model overrides:
 
-## Usage
+```env
+FRONTEND_BASE_URL=http://localhost:8501
+OWNER_MODEL=gemini-2.5-flash
+PAID_MODEL=google/gemma-2-9b-it
+CREDIT_PACK_SIZE=10
+PRICE_AMOUNT_CENTS=900
+PRICE_CURRENCY=eur
+```
 
-1. Start the Streamlit app:
-   ```bash
-   streamlit run app.py
-   ```
-
-2. In the sidebar, enter your **Google AI Studio API Key**.
-
-3. Select a Gemini model version (e.g., Gemini 3 Flash, Gemini 3.5 Flash, or Gemma 4).
-
-4. Upload your **CV** (PDF, DOCX, TXT, or MD) and the **Job Description** (TXT, MD, or PDF).
-
-5. Click **"Calculate ATS Score"** to view your dashboard.
-
-6. Click **"Optimize CV"** to run the gap analysis and generate tailored skill suggestions.
-
-7. Select which suggestions to include, then click **"Generate Final Harvard CV & PDF"**.
-
-8. Download your optimized resume as a **Harvard-style PDF** or **Markdown** file.
-
-## Environment Variables
-
-You can optionally set your API key as an environment variable instead of entering it in the UI each time. Copy `.env.example` to `.env` and fill in your key:
+## Local Setup
 
 ```bash
-cp .env.example .env
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-**`.env.example` contents:**
+Start the backend:
+
+```bash
+uvicorn api.main:app --reload
 ```
-GOOGLE_API_KEY=
+
+Start Streamlit in a second terminal:
+
+```bash
+streamlit run app.py
 ```
 
-## Screenshot
+The Streamlit sidebar defaults to `http://127.0.0.1:8000` for the backend API.
 
-<!-- Replace the placeholder below with an actual screenshot of the app -->
-![App Screenshot](docs/screenshot.png)
+## Owner Flow
 
-## License
+1. Enter the server `OWNER_TOKEN` in the Streamlit sidebar.
+2. Streamlit sends it as `X-Owner-Token`.
+3. FastAPI compares it to the env token using constant-time comparison.
+4. Owner requests skip Stripe and usage checks.
+5. AI requests run with `GOOGLE_API_KEY`.
 
-MIT
+## Paid Flow
+
+1. Enter an email in the sidebar and click **Comprar 10 creditos**.
+2. Streamlit asks FastAPI to create a Stripe Checkout Session.
+3. Stripe redirects back with `checkout_session_id`.
+4. Streamlit exchanges that checkout id for a paid session token.
+5. FastAPI stores only a SHA-256 hash of the session token.
+6. Paid ATS/PDF endpoints require the token; `/api/optimize` consumes one credit.
+
+For local Stripe webhooks:
+
+```bash
+stripe listen --forward-to localhost:8000/api/billing/webhook
+```
+
+## API Endpoints
+
+- `GET /api/health`
+- `POST /api/billing/create-checkout`
+- `POST /api/billing/exchange-session`
+- `POST /api/billing/webhook`
+- `POST /api/session/status`
+- `POST /api/ats-score`
+- `POST /api/optimize`
+- `POST /api/generate-cv`
+
+Authenticated AI/PDF endpoints accept either `X-Owner-Token`, `Authorization: Bearer <paid-session-token>`, or matching token fields in the JSON body.
+
+## Tests
+
+```bash
+pytest
+```
+
+The tests cover deterministic ATS scoring shape, preserved optimizer prompt rules, owner token auth, paid token auth and credit consumption, and PDF byte generation.

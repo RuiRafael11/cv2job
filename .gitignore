@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -22,6 +23,10 @@ ENV/
 job*.txt
 jd*.txt
 applications.csv
+cv2job.db
+cv2job.db-*
+*.sqlite
+*.sqlite3
 
 # IDE
 .vscode/
