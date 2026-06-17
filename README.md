@@ -20,6 +20,7 @@ GOOGLE_API_KEY=          # Gemini key (owner tier)
 OPENROUTER_API_KEY=      # OpenRouter key (paid tier)
 OWNER_TOKEN=             # Secret token that bypasses payment
 STRIPE_SECRET_KEY=       # Stripe secret
+STRIPE_PUBLISHABLE_KEY=  # Stripe publishable key
 STRIPE_WEBHOOK_SECRET=   # Stripe webhook
 DATABASE_URL=sqlite:///cv2job.db
 ```
@@ -69,15 +70,15 @@ The Streamlit sidebar defaults to `http://127.0.0.1:8000` for the backend API.
 
 1. Enter an email in the sidebar and click **Comprar 10 creditos**.
 2. Streamlit asks FastAPI to create a Stripe Checkout Session.
-3. Stripe redirects back with `checkout_session_id`.
-4. Streamlit exchanges that checkout id for a paid session token.
+3. Stripe redirects back with `session_token={CHECKOUT_SESSION_ID}`.
+4. Streamlit exchanges that checkout session id for a paid session token.
 5. FastAPI stores only a SHA-256 hash of the session token.
 6. Paid ATS/PDF endpoints require the token; `/api/optimize` consumes one credit.
 
 For local Stripe webhooks:
 
 ```bash
-stripe listen --forward-to localhost:8000/api/billing/webhook
+stripe listen --forward-to localhost:8000/api/stripe/webhook
 ```
 
 ## API Endpoints
@@ -85,7 +86,8 @@ stripe listen --forward-to localhost:8000/api/billing/webhook
 - `GET /api/health`
 - `POST /api/billing/create-checkout`
 - `POST /api/billing/exchange-session`
-- `POST /api/billing/webhook`
+- `POST /api/stripe/webhook`
+- `POST /api/billing/webhook` (compatibility alias)
 - `POST /api/session/status`
 - `POST /api/ats-score`
 - `POST /api/optimize`

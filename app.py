@@ -128,7 +128,7 @@ def render_unlock_cta() -> None:
     if st.button(f"Comprar 10 creditos — {price_label}", use_container_width=True, key="unlock_buy_credits"):
         try:
             current_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:8501")
-            success_url = f"{current_url}?checkout_session_id={{CHECKOUT_SESSION_ID}}"
+            success_url = f"{current_url}?session_token={{CHECKOUT_SESSION_ID}}"
             data = call_api(
                 "/api/billing/create-checkout",
                 {
@@ -142,7 +142,10 @@ def render_unlock_cta() -> None:
         except Exception as e:
             st.error(f"Erro ao criar checkout: {e}")
     if st.session_state.checkout_url:
-        st.link_button("Abrir Stripe Checkout", st.session_state.checkout_url, use_container_width=True)
+        st.markdown(
+            f'<a href="{esc(st.session_state.checkout_url)}" target="_blank" rel="noopener noreferrer">Abrir Stripe Checkout</a>',
+            unsafe_allow_html=True,
+        )
 
 
 def current_context() -> dict:
@@ -154,7 +157,7 @@ def current_context() -> dict:
 
 
 query_params = st.query_params
-checkout_session_id = query_params.get("checkout_session_id")
+checkout_session_id = query_params.get("session_token") or query_params.get("checkout_session_id")
 if checkout_session_id and st.session_state.exchanged_checkout_session_id != checkout_session_id:
     try:
         data = call_api(
