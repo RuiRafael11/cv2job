@@ -70,6 +70,7 @@ def exchange_session(payload: CheckoutExchangeRequest, db: Session = Depends(get
     )
 
 
+@app.post("/api/stripe/webhook")
 @app.post("/api/billing/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     return await billing.handle_stripe_webhook(request, db)

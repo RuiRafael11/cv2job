@@ -11,6 +11,7 @@ OWNER_TOKEN = os.getenv("OWNER_TOKEN", "")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///cv2job.db")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:8501")
 
 OWNER_MODEL = os.getenv("OWNER_MODEL", "gemini-2.5-flash")
 PAID_MODEL = os.getenv("PAID_MODEL", "google/gemma-2-9b-it")
