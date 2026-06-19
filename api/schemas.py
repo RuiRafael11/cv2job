@@ -25,6 +25,32 @@ class OptimizeRequest(AuthenticatedRequest):
     job: str
     ats: dict[str, Any]
     context: WizardContext
+    agent_review: dict[str, Any] | None = None
+
+
+class AgentReviewRequest(AuthenticatedRequest):
+    cv: str
+    job: str
+    ats: dict[str, Any] | None = None
+    context: WizardContext | None = None
+
+
+class AgentPanelReview(BaseModel):
+    agent: str
+    score: int
+    verdict: str
+    findings: list[str]
+    recommendations: list[str]
+
+
+class AgentReviewResponse(BaseModel):
+    reviews: list[AgentPanelReview]
+    consensus: str
+    priority_actions: list[str]
+    truthfulness_warnings: list[str]
+    optimizer_recommendations: list[str]
+    source: str
+    guardrails: list[str]
 
 
 class GenerateCvRequest(AuthenticatedRequest):

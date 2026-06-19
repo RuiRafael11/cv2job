@@ -7,13 +7,13 @@ SECTION_CAPS = {
 
 SESSION_KEYS = (
     "wizard_step", "q1_answer", "q2_answer", "q3_answer", "jd_text_pasted",
-    "suggestions", "ats_data", "final_markdown", "cv_content", "job_content",
+    "suggestions", "ats_data", "agent_review", "agent_review_error", "final_markdown", "cv_content", "job_content",
     "api_base_url", "backend_session_token", "paid_email", "login_email",
     "checkout_session_id", "exchanged_checkout_session_id", "checkout_url", "credits_remaining",
     "pdf_bytes", "pdf_hash", "inputs_fp",
 )
 
-DERIVED_KEYS = ("ats_data", "final_markdown", "pdf_bytes", "pdf_hash")
+DERIVED_KEYS = ("ats_data", "agent_review", "agent_review_error", "final_markdown", "pdf_bytes", "pdf_hash")
 
 WIZARD_QUESTIONS = [
     {

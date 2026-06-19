@@ -15,6 +15,7 @@ from api.main import app
 from api.db import Base
 from api.models import CheckoutRecord, PaidSession, User, utcnow
 from pdf.harvard import convert_markdown_to_harvard_pdf, split_pipe_line
+from services.agents import build_deterministic_agent_review, run_agent_review
 from services.ats import compute_local_ats
 from services.optimizer import build_optimize_prompts
 
@@ -82,6 +83,51 @@ def test_optimizer_prompt_rules_are_preserved():
     assert "NEVER invent employers, dates, degrees, certifications, or tools" in sys_prompt
     assert "Output ONLY clean Markdown starting with '# Full Name'" in sys_prompt
     assert "Original resume:\nOriginal CV" in user_prompt
+
+
+def test_optimizer_accepts_optional_agent_review():
+    _, user_prompt = build_optimize_prompts(
+        "Original CV",
+        "Python job",
+        {"overall_score": 50, "keywords_missing": ["python"], "next_steps": []},
+        {"q1": "N/A", "q2": "N/A", "q3": "N/A"},
+        {
+            "consensus": "Keep the rewrite truthful.",
+            "optimizer_recommendations": ["Prioritize supported Python evidence."],
+            "truthfulness_warnings": ["Do not invent tools."],
+            "priority_actions": ["Tighten the summary."],
+        },
+    )
+    assert "Agent review guidance" in user_prompt
+    assert "Keep the rewrite truthful" in user_prompt
+
+
+def test_agent_review_deterministic_shape():
+    review = build_deterministic_agent_review(
+        "Python developer with FastAPI",
+        "Python FastAPI Docker role",
+        {
+            "overall_score": 60,
+            "keywords_present": ["python", "fastapi"],
+            "keywords_missing": ["docker"],
+            "next_steps": [{"title": "Add supported Docker evidence"}],
+        },
+        {"q1": "Quase nunca", "q2": "Backend Developer", "q3": "Vaga especifica"},
+    )
+    assert [item["agent"] for item in review["reviews"]] == ["ATS", "Recruiter", "Truthfulness", "Writer"]
+    assert review["consensus"]
+    assert "docker" in " ".join(review["optimizer_recommendations"]).lower()
+    assert any("Do not invent" in rule for rule in review["guardrails"])
+
+
+def test_agent_review_falls_back_when_provider_fails():
+    class BrokenClient:
+        def generate_json(self, *args, **kwargs):
+            raise RuntimeError("provider down")
+
+    review = run_agent_review(BrokenClient(), "CV", "Job")
+    assert review["source"] == "deterministic"
+    assert [item["agent"] for item in review["reviews"]] == ["ATS", "Recruiter", "Truthfulness", "Writer"]
 
 
 def test_owner_token_validation(monkeypatch):
@@ -190,6 +236,28 @@ def test_ats_score_is_available_without_auth():
     data = response.json()
     assert "overall_score" in data
     assert "Preview gratuito" in data["diagnostic"]
+
+
+def test_agent_review_endpoint_is_available_without_auth():
+    client = TestClient(app)
+    response = client.post(
+        "/api/agent-review",
+        json={
+            "cv": "Python developer with FastAPI",
+            "job": "Python FastAPI Docker role",
+            "ats": {
+                "overall_score": 60,
+                "keywords_present": ["python", "fastapi"],
+                "keywords_missing": ["docker"],
+                "section_scores": {},
+            },
+            "context": {"q1": "N/A", "q2": "N/A", "q3": "N/A"},
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert [item["agent"] for item in data["reviews"]] == ["ATS", "Recruiter", "Truthfulness", "Writer"]
+    assert data["source"] == "deterministic"
 
 
 def test_create_checkout_uses_configured_success_url(client_and_db, monkeypatch):

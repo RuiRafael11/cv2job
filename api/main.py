@@ -9,6 +9,8 @@ from api.ai_clients import AIClientError, client_for_tier
 from api.auth import consume_paid_credit, resolve_actor
 from api.db import get_db, init_db
 from api.schemas import (
+    AgentReviewRequest,
+    AgentReviewResponse,
     AtsScoreRequest,
     CheckoutCreateRequest,
     CheckoutCreateResponse,
@@ -25,6 +27,7 @@ from api.schemas import (
 )
 from pdf.harvard import convert_markdown_to_harvard_pdf
 from services.ats import compute_local_ats, run_ats_analysis
+from services.agents import build_deterministic_agent_review, run_agent_review
 from services.optimizer import build_optimize_prompts, strip_markdown_fences
 
 
@@ -130,6 +133,28 @@ def ats_score(payload: AtsScoreRequest, request: Request, db: Session = Depends(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
+@app.post("/api/agent-review", response_model=AgentReviewResponse)
+def agent_review(payload: AgentReviewRequest, request: Request, db: Session = Depends(get_db)):
+    context = payload.context.model_dump() if payload.context else {}
+    fallback = build_deterministic_agent_review(payload.cv, payload.job, payload.ats, context)
+    try:
+        actor = resolve_actor(request, db, payload.owner_token, payload.session_token)
+    except HTTPException:
+        return fallback
+    if actor.tier != "owner":
+        return fallback
+    try:
+        return run_agent_review(
+            client_for_tier(actor.tier),
+            payload.cv,
+            payload.job,
+            payload.ats,
+            context,
+        )
+    except AIClientError:
+        return fallback
+
+
 @app.post("/api/optimize", response_model=OptimizeResponse)
 def optimize(payload: OptimizeRequest, request: Request, db: Session = Depends(get_db)):
     actor = resolve_actor(request, db, payload.owner_token, payload.session_token)
@@ -140,6 +165,7 @@ def optimize(payload: OptimizeRequest, request: Request, db: Session = Depends(g
             payload.job,
             payload.ats,
             payload.context.dict(),
+            payload.agent_review,
         )
         markdown = client_for_tier(actor.tier).generate_text(
             user_prompt,

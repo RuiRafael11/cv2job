@@ -44,6 +44,8 @@ def init_session_state() -> None:
         ("jd_text_pasted", ""),
         ("suggestions", []),
         ("ats_data", None),
+        ("agent_review", None),
+        ("agent_review_error", ""),
         ("final_markdown", ""),
         ("cv_content", None),
         ("job_content", None),

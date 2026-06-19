@@ -24,6 +24,8 @@ defaults = {
     "jd_text_pasted": "",
     "suggestions": [],
     "ats_data": None,
+    "agent_review": None,
+    "agent_review_error": "",
     "final_markdown": "",
     "cv_content": None,
     "job_content": None,
@@ -322,6 +324,20 @@ if st.session_state.wizard_step == 4:
                     "context": current_context(),
                 },
             )
+            try:
+                st.session_state.agent_review = call_api(
+                    "/api/agent-review",
+                    {
+                        "cv": st.session_state.cv_content,
+                        "job": st.session_state.job_content,
+                        "ats": st.session_state.ats_data,
+                        "context": current_context(),
+                    },
+                )
+                st.session_state.agent_review_error = ""
+            except Exception as agent_error:
+                st.session_state.agent_review = None
+                st.session_state.agent_review_error = str(agent_error)
             st.session_state.wizard_step = 5
             st.rerun()
         except Exception as e:
@@ -426,6 +442,28 @@ if st.session_state.wizard_step == 5 and st.session_state.ats_data:
         </div>
         """, unsafe_allow_html=True)
 
+    if st.session_state.get("agent_review"):
+        review = st.session_state.agent_review
+        st.markdown("<div class='section-badge' style='margin-top:40px;'>AI AGENT REVIEW</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="detail-card" style="margin-bottom:16px;">
+          <div style="font-size:1.4rem; font-family:'Playfair Display',serif; margin-bottom:10px;">Consenso dos agentes</div>
+          <div style="color:var(--text-secondary); line-height:1.5;">{esc(review.get("consensus", ""))}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        cols = st.columns(4)
+        for idx, agent in enumerate(review.get("reviews", [])[:4]):
+            with cols[idx]:
+                st.markdown(f"""
+                <div class="detail-card">
+                  <div class="section-badge">{esc(agent.get("agent", ""))}</div>
+                  <div style="font-size:2rem; font-family:'Playfair Display',serif; color:var(--accent);">{int(agent.get("score", 0))}</div>
+                  <div style="color:var(--text-secondary); font-size:0.9rem; line-height:1.4;">{esc(agent.get("verdict", ""))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    elif st.session_state.get("agent_review_error"):
+        st.warning(f"AI Agent Review indisponivel. Podes continuar apenas com ATS. Detalhe: {st.session_state.agent_review_error}")
+
     st.markdown("<br>", unsafe_allow_html=True)
     _, btn_col, _ = st.columns([1, 1, 1])
     with btn_col:
@@ -454,6 +492,7 @@ if st.session_state.wizard_step == 6:
                     "job": st.session_state.job_content,
                     "ats": st.session_state.ats_data or {},
                     "context": current_context(),
+                    "agent_review": st.session_state.agent_review,
                 },
             )
             st.session_state.final_markdown = data["markdown"]

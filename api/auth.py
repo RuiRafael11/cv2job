@@ -43,22 +43,13 @@ def resolve_actor(
     session_token: str | None = None,
 ) -> Actor:
     bearer = _bearer_token(request)
-    print(
-        "auth debug:",
-        {
-            "authorization_bearer": bearer,
-            "owner_token_env_prefix": config.OWNER_TOKEN[:8] if config.OWNER_TOKEN else "",
-        },
-    )
     supplied_owner_token = _owner_token(request, owner_token)
     if config.OWNER_TOKEN and supplied_owner_token:
         if hmac.compare_digest(supplied_owner_token, config.OWNER_TOKEN):
-            print("auth debug: branch=owner")
             return Actor(tier="owner")
 
     token = bearer or session_token or request.cookies.get("cv2job_session")
     if not token:
-        print("auth debug: branch=rejected missing-token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing owner token or paid session token.",
@@ -66,20 +57,17 @@ def resolve_actor(
 
     paid_session = db.query(PaidSession).filter(PaidSession.token_hash == hash_token(token)).first()
     if not paid_session:
-        print("auth debug: branch=rejected invalid-session")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
 
     expires_at = paid_session.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at <= datetime.now(timezone.utc):
-        print("auth debug: branch=rejected expired-session")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session token expired.")
 
     paid_session.last_used_at = utcnow()
     db.commit()
     db.refresh(paid_session)
-    print("auth debug: branch=paid")
     return Actor(tier="paid", user=paid_session.user)
 
 
