@@ -53,6 +53,7 @@ def init_session_state() -> None:
         ("backend_session_token", ""),
         ("paid_email", ""),
         ("login_email", ""),
+        ("output_language", "en"),
         ("checkout_session_id", ""),
         ("exchanged_checkout_session_id", ""),
         ("checkout_url", ""),

@@ -9,6 +9,7 @@ SESSION_KEYS = (
     "wizard_step", "q1_answer", "q2_answer", "q3_answer", "jd_text_pasted",
     "suggestions", "ats_data", "agent_review", "agent_review_error", "final_markdown", "cv_content", "job_content",
     "api_base_url", "backend_session_token", "paid_email", "login_email",
+    "output_language",
     "checkout_session_id", "exchanged_checkout_session_id", "checkout_url", "credits_remaining",
     "pdf_bytes", "pdf_hash", "inputs_fp",
 )

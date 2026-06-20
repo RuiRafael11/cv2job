@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from api import billing
+from api import billing, config
 from api.ai_clients import AIClientError, client_for_tier
 from api.auth import consume_paid_credit, resolve_actor
 from api.db import get_db, init_db
@@ -81,6 +81,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    if not config.ENABLE_UNVERIFIED_EMAIL_LOGIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unverified email login is disabled. Use Stripe Checkout to create a paid session.",
+        )
     token, user = billing.create_login_session(db, payload.email.strip().lower())
     return LoginResponse(
         session_token=token,

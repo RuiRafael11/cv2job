@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OWNER_TOKEN = os.getenv("OWNER_TOKEN", "")
@@ -24,3 +32,4 @@ PRODUCT_NAME = os.getenv("STRIPE_PRODUCT_NAME", "cv2job 10 CV optimization credi
 PAID_SESSION_TTL_DAYS = int(os.getenv("PAID_SESSION_TTL_DAYS", "30"))
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "https://github.com/RuiRafael11/cv2job")
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "cv2job")
+ENABLE_UNVERIFIED_EMAIL_LOGIN = _env_bool("ENABLE_UNVERIFIED_EMAIL_LOGIN", False)

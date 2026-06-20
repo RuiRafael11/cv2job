@@ -36,6 +36,7 @@ defaults = {
     "exchanged_checkout_session_id": "",
     "checkout_url": "",
     "credits_remaining": None,
+    "output_language": "en",
     "pdf_bytes": None,
     "pdf_hash": None,
     "inputs_fp": None,
@@ -47,6 +48,12 @@ load_dotenv()
 SERVER_OWNER_TOKEN = os.getenv("OWNER_TOKEN", "")
 PRICE_AMOUNT_CENTS = int(os.getenv("PRICE_AMOUNT_CENTS", "900"))
 PRICE_CURRENCY = os.getenv("PRICE_CURRENCY", "eur").upper()
+ENABLE_UNVERIFIED_EMAIL_LOGIN = os.getenv("ENABLE_UNVERIFIED_EMAIL_LOGIN", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 st.set_page_config(layout="wide", page_title="ATS AI Resume Optimizer")
 inject_custom_css()
@@ -100,14 +107,50 @@ def has_unlock_access() -> bool:
 
 
 def login_user(email: str) -> None:
+    if not ENABLE_UNVERIFIED_EMAIL_LOGIN:
+        raise RuntimeError("Login por email sem verificacao esta desativado. Usa Stripe Checkout.")
     data = call_api("/api/auth/login", {"email": email})
     st.session_state.backend_session_token = data["session_token"]
     st.session_state.paid_email = data["email"]
     st.session_state.credits_remaining = data["credits_remaining"]
 
 
+def start_checkout(email: str) -> None:
+    email = email.strip()
+    if not email:
+        raise RuntimeError("Insere um email para continuar.")
+    current_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:8501")
+    success_url = f"{current_url}?session_token={{CHECKOUT_SESSION_ID}}"
+    data = call_api(
+        "/api/billing/create-checkout",
+        {
+            "email": email,
+            "success_url": success_url,
+            "cancel_url": current_url,
+        },
+    )
+    st.session_state.paid_email = email
+    st.session_state.checkout_url = data["checkout_url"]
+    st.session_state.checkout_session_id = data["checkout_session_id"]
+
+
+def output_language_label() -> str:
+    return "Português" if st.session_state.output_language == "pt" else "English"
+
+
+def sync_output_language(selected_label: str) -> None:
+    selected_language = "pt" if selected_label == "Português" else "en"
+    if st.session_state.output_language != selected_language:
+        st.session_state.output_language = selected_language
+        st.session_state.final_markdown = ""
+        for key in ("pdf_bytes", "pdf_hash"):
+            st.session_state.pop(key, None)
+        if st.session_state.get("wizard_step", 0) >= 7:
+            st.session_state.wizard_step = 6
+
+
 def render_unlock_cta() -> None:
-    st.info("Para ver o resultado completo, faz login e compra creditos.")
+    st.info("Para ver o resultado completo, compra creditos via Stripe.")
     if not st.session_state.backend_session_token:
         st.session_state.login_email = st.text_input(
             "Email",
@@ -115,32 +158,23 @@ def render_unlock_cta() -> None:
             placeholder="teu@email.com",
             key="unlock_login_email",
         )
-        if st.button("Entrar / Registar", use_container_width=True, key="unlock_login_button"):
-            if not st.session_state.login_email.strip():
-                st.error("Insere um email para continuar.")
-            else:
+        if ENABLE_UNVERIFIED_EMAIL_LOGIN:
+            if st.button("Entrar / Registar", use_container_width=True, key="unlock_login_button"):
                 try:
                     login_user(st.session_state.login_email.strip())
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro no login: {e}")
-        return
+        else:
+            st.caption("Login por email sem verificacao esta desativado. Usa o checkout para criar sessao paga.")
+        checkout_email = st.session_state.login_email.strip()
+    else:
+        checkout_email = st.session_state.paid_email or st.session_state.login_email
 
     price_label = f"{PRICE_AMOUNT_CENTS / 100:.2f} {PRICE_CURRENCY}"
     if st.button(f"Comprar 10 creditos — {price_label}", use_container_width=True, key="unlock_buy_credits"):
         try:
-            current_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:8501")
-            success_url = f"{current_url}?session_token={{CHECKOUT_SESSION_ID}}"
-            data = call_api(
-                "/api/billing/create-checkout",
-                {
-                    "email": st.session_state.paid_email,
-                    "success_url": success_url,
-                    "cancel_url": current_url,
-                },
-            )
-            st.session_state.checkout_url = data["checkout_url"]
-            st.session_state.checkout_session_id = data["checkout_session_id"]
+            start_checkout(checkout_email)
         except Exception as e:
             st.error(f"Erro ao criar checkout: {e}")
     if st.session_state.checkout_url:
@@ -184,6 +218,13 @@ with st.sidebar:
         value=st.session_state.api_base_url,
         help="Ex.: http://127.0.0.1:8000",
     )
+    selected_language_label = st.radio(
+        "Idioma do CV",
+        ["English", "Português"],
+        index=0 if st.session_state.output_language == "en" else 1,
+        horizontal=True,
+    )
+    sync_output_language(selected_language_label)
     if SERVER_OWNER_TOKEN:
         st.success("Modo owner ativo.")
     elif st.session_state.backend_session_token:
@@ -197,15 +238,26 @@ with st.sidebar:
             value=st.session_state.login_email,
             placeholder="teu@email.com",
         )
-        if st.button("Entrar / Registar", use_container_width=True):
-            if not st.session_state.login_email.strip():
-                st.error("Insere um email para continuar.")
-            else:
+        if ENABLE_UNVERIFIED_EMAIL_LOGIN:
+            if st.button("Entrar / Registar", use_container_width=True):
                 try:
                     login_user(st.session_state.login_email.strip())
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro no login: {e}")
+        else:
+            st.caption("Login por email sem verificacao desativado.")
+        price_label = f"{PRICE_AMOUNT_CENTS / 100:.2f} {PRICE_CURRENCY}"
+        if st.button(f"Comprar 10 creditos — {price_label}", use_container_width=True, key="sidebar_buy_credits"):
+            try:
+                start_checkout(st.session_state.login_email)
+            except Exception as e:
+                st.error(f"Erro ao criar checkout: {e}")
+        if st.session_state.checkout_url:
+            st.markdown(
+                f'<a href="{esc(st.session_state.checkout_url)}" target="_blank" rel="noopener noreferrer">Abrir Stripe Checkout</a>',
+                unsafe_allow_html=True,
+            )
 
     if st.button("Reiniciar App"):
         reset_session()
@@ -493,6 +545,7 @@ if st.session_state.wizard_step == 6:
                     "ats": st.session_state.ats_data or {},
                     "context": current_context(),
                     "agent_review": st.session_state.agent_review,
+                    "language": st.session_state.output_language,
                 },
             )
             st.session_state.final_markdown = data["markdown"]
@@ -512,10 +565,17 @@ if st.session_state.wizard_step == 6:
 if st.session_state.wizard_step == 7:
     st.markdown("<div class='section-badge'>CV FINALIZADO</div>", unsafe_allow_html=True)
     st.markdown("<h2 style='margin-bottom: 24px;'>Download do Documento</h2>", unsafe_allow_html=True)
+    st.caption(f"Idioma do CV: {output_language_label()}")
 
     if not st.session_state.get("pdf_bytes"):
         try:
-            data = call_api("/api/generate-cv", {"markdown": st.session_state.final_markdown})
+            data = call_api(
+                "/api/generate-cv",
+                {
+                    "markdown": st.session_state.final_markdown,
+                    "language": st.session_state.output_language,
+                },
+            )
             st.session_state.pdf_bytes = base64.b64decode(data["pdf_base64"])
         except Exception as e:
             st.error(f"Erro ao gerar PDF: {e}")

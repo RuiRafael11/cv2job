@@ -291,11 +291,24 @@ def test_pdf_long_contact_line_is_split_across_two_lines():
     assert "linkedin.com/in/user" in text
 
 
-def test_login_returns_session_without_granting_credits(client_and_db):
+def test_login_is_blocked_by_default(client_and_db, monkeypatch):
     client, db = client_and_db
     user = User(email="user@example.com", credits_remaining=3)
     db.add(user)
     db.commit()
+    monkeypatch.setattr(api_main.config, "ENABLE_UNVERIFIED_EMAIL_LOGIN", False)
+
+    response = client.post("/api/auth/login", json={"email": " USER@example.com "})
+
+    assert response.status_code == 403
+
+
+def test_login_returns_session_without_granting_credits_when_enabled(client_and_db, monkeypatch):
+    client, db = client_and_db
+    user = User(email="user@example.com", credits_remaining=3)
+    db.add(user)
+    db.commit()
+    monkeypatch.setattr(api_main.config, "ENABLE_UNVERIFIED_EMAIL_LOGIN", True)
 
     response = client.post("/api/auth/login", json={"email": " USER@example.com "})
     assert response.status_code == 200

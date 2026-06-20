@@ -34,7 +34,10 @@ PAID_MODEL=google/gemma-2-9b-it
 CREDIT_PACK_SIZE=10
 PRICE_AMOUNT_CENTS=900
 PRICE_CURRENCY=eur
+ENABLE_UNVERIFIED_EMAIL_LOGIN=false
 ```
+
+`ENABLE_UNVERIFIED_EMAIL_LOGIN=true` is only for local development/demo recovery flows. In production, keep it disabled and use the Stripe Checkout flow below. `STRIPE_WEBHOOK_SECRET` should be configured in production so webhook events are signature-verified.
 
 ## Local Setup
 
@@ -61,19 +64,25 @@ The Streamlit sidebar defaults to `http://127.0.0.1:8000` for the backend API.
 ## Owner Flow
 
 1. Enter the server `OWNER_TOKEN` in the Streamlit sidebar.
-2. Streamlit sends it as `X-Owner-Token`.
+2. Streamlit sends it as `Authorization: Bearer <OWNER_TOKEN>`; the backend also accepts `X-Owner-Token`.
 3. FastAPI compares it to the env token using constant-time comparison.
 4. Owner requests skip Stripe and usage checks.
 5. AI requests run with `GOOGLE_API_KEY`.
 
+Do not expose `OWNER_TOKEN` in a public frontend. It is intended for trusted local/admin use only.
+
 ## Paid Flow
 
-1. Enter an email in the sidebar and click **Comprar 10 creditos**.
+Recommended production flow:
+
+1. Enter an email and click **Comprar 10 creditos**.
 2. Streamlit asks FastAPI to create a Stripe Checkout Session.
 3. Stripe redirects back with `session_token={CHECKOUT_SESSION_ID}`.
-4. Streamlit exchanges that checkout session id for a paid session token.
-5. FastAPI stores only a SHA-256 hash of the session token.
-6. Paid ATS/PDF endpoints require the token; `/api/optimize` consumes one credit.
+4. Streamlit exchanges that checkout session id through `POST /api/billing/exchange-session`.
+5. FastAPI issues a paid session token and stores only its SHA-256 hash.
+6. Paid ATS/PDF endpoints require the token; `POST /api/optimize` consumes one credit.
+
+`POST /api/auth/login` is disabled by default because it creates a session from an email without proving ownership of that inbox. Enable it only for local development/demo by setting `ENABLE_UNVERIFIED_EMAIL_LOGIN=true`.
 
 For local Stripe webhooks:
 
@@ -84,16 +93,27 @@ stripe listen --forward-to localhost:8000/api/stripe/webhook
 ## API Endpoints
 
 - `GET /api/health`
+- `POST /api/auth/login` (disabled by default; dev/demo only)
 - `POST /api/billing/create-checkout`
 - `POST /api/billing/exchange-session`
 - `POST /api/stripe/webhook`
 - `POST /api/billing/webhook` (compatibility alias)
 - `POST /api/session/status`
 - `POST /api/ats-score`
+- `POST /api/agent-review`
 - `POST /api/optimize`
 - `POST /api/generate-cv`
 
 Authenticated AI/PDF endpoints accept either `X-Owner-Token`, `Authorization: Bearer <paid-session-token>`, or matching token fields in the JSON body.
+
+## CV Output Language
+
+The optimizer supports two output languages:
+
+- `en` — English, default
+- `pt` — Portuguese
+
+Streamlit exposes this as **English / Português**. The selected `language` is sent to `POST /api/optimize` and `POST /api/generate-cv`. The PDF generator renders the optimized Markdown it receives, so section headings and prose come from the optimizer output.
 
 ## Tests
 
@@ -101,4 +121,4 @@ Authenticated AI/PDF endpoints accept either `X-Owner-Token`, `Authorization: Be
 pytest
 ```
 
-The tests cover deterministic ATS scoring shape, preserved optimizer prompt rules, owner token auth, paid token auth and credit consumption, and PDF byte generation.
+The tests cover deterministic ATS scoring shape, preserved optimizer prompt rules, EN/PT output language handling, owner token auth, paid token auth and credit consumption, guarded email login, Stripe checkout/exchange behavior, and PDF byte generation.
