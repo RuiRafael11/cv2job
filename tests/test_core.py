@@ -221,6 +221,47 @@ def test_paid_token_validation_and_credit_consumption():
     assert auth.consume_paid_credit(db, actor) == 0
 
 
+def test_session_status_returns_paid_session_credits(client_and_db):
+    client, db = client_and_db
+    token = "paid-status-token"
+    user = User(email="paid@example.com", credits_remaining=4)
+    db.add(user)
+    db.commit()
+    db.add(
+        PaidSession(
+            user_id=user.id,
+            token_hash=auth.hash_token(token),
+            expires_at=utcnow() + timedelta(days=1),
+        )
+    )
+    db.commit()
+
+    response = client.post("/api/session/status", json={"session_token": token})
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "paid@example.com", "credits_remaining": 4}
+
+
+def test_session_status_rejects_expired_session(client_and_db):
+    client, db = client_and_db
+    token = "expired-status-token"
+    user = User(email="paid@example.com", credits_remaining=4)
+    db.add(user)
+    db.commit()
+    db.add(
+        PaidSession(
+            user_id=user.id,
+            token_hash=auth.hash_token(token),
+            expires_at=utcnow() - timedelta(days=1),
+        )
+    )
+    db.commit()
+
+    response = client.post("/api/session/status", json={"session_token": token})
+
+    assert response.status_code == 401
+
+
 def test_pdf_generation_returns_pdf_bytes():
     pdf = convert_markdown_to_harvard_pdf("# Full Name\nemail@example.com\n## SKILLS\n- Python")
     assert pdf.startswith(b"%PDF")

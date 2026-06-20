@@ -54,6 +54,7 @@ def init_session_state() -> None:
         ("paid_email", ""),
         ("login_email", ""),
         ("output_language", "en"),
+        ("session_status_message", ""),
         ("checkout_session_id", ""),
         ("exchanged_checkout_session_id", ""),
         ("checkout_url", ""),

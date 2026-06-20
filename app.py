@@ -37,6 +37,7 @@ defaults = {
     "checkout_url": "",
     "credits_remaining": None,
     "output_language": "en",
+    "session_status_message": "",
     "pdf_bytes": None,
     "pdf_hash": None,
     "inputs_fp": None,
@@ -134,6 +135,46 @@ def start_checkout(email: str) -> None:
     st.session_state.checkout_session_id = data["checkout_session_id"]
 
 
+def clear_paid_session(message: str = "") -> None:
+    st.session_state.backend_session_token = ""
+    st.session_state.credits_remaining = None
+    st.session_state.session_status_message = message
+
+
+def refresh_paid_session_status(show_success: bool = True) -> None:
+    if not st.session_state.backend_session_token:
+        clear_paid_session("Sem sessao paga ativa.")
+        return
+    try:
+        data = call_api(
+            "/api/session/status",
+            {"session_token": st.session_state.backend_session_token},
+        )
+        st.session_state.paid_email = data["email"]
+        st.session_state.credits_remaining = data["credits_remaining"]
+        if show_success:
+            st.session_state.session_status_message = "Sessao verificada."
+    except Exception as e:
+        detail = str(e)
+        if "expired" in detail.lower() or "invalid session" in detail.lower():
+            clear_paid_session("Sessao expirada ou invalida. Compra creditos para criar uma nova sessao.")
+        else:
+            st.session_state.session_status_message = f"Nao foi possivel verificar a sessao: {detail}"
+
+
+def session_state_label() -> tuple[str, str]:
+    if SERVER_OWNER_TOKEN:
+        return "Owner mode", "Owner token ativo. Creditos nao sao consumidos."
+    if not st.session_state.backend_session_token:
+        return "Sem sessao paga", "Compra creditos para criar uma sessao paga."
+    credits = st.session_state.credits_remaining
+    if credits is None:
+        return "Sessao paga", "Creditos ainda nao verificados."
+    if credits <= 0:
+        return "Sem creditos", "Compra mais creditos para otimizar."
+    return "Sessao paga ativa", f"Creditos disponiveis: {credits}"
+
+
 def output_language_label() -> str:
     return "Português" if st.session_state.output_language == "pt" else "English"
 
@@ -150,7 +191,8 @@ def sync_output_language(selected_label: str) -> None:
 
 
 def render_unlock_cta() -> None:
-    st.info("Para ver o resultado completo, compra creditos via Stripe.")
+    title, description = session_state_label()
+    st.info(f"{title}: {description}")
     if not st.session_state.backend_session_token:
         st.session_state.login_email = st.text_input(
             "Email",
@@ -170,6 +212,9 @@ def render_unlock_cta() -> None:
         checkout_email = st.session_state.login_email.strip()
     else:
         checkout_email = st.session_state.paid_email or st.session_state.login_email
+        if st.button("Verificar sessao", use_container_width=True, key="unlock_refresh_session"):
+            refresh_paid_session_status()
+            st.rerun()
 
     price_label = f"{PRICE_AMOUNT_CENTS / 100:.2f} {PRICE_CURRENCY}"
     if st.button(f"Comprar 10 creditos — {price_label}", use_container_width=True, key="unlock_buy_credits"):
@@ -205,8 +250,9 @@ if checkout_session_id and st.session_state.exchanged_checkout_session_id != che
         st.session_state.credits_remaining = data["credits_remaining"]
         st.session_state.exchanged_checkout_session_id = checkout_session_id
         st.session_state.checkout_url = ""
+        st.session_state.session_status_message = "Pagamento confirmado."
         st.query_params.clear()
-        st.success("Pagamento confirmado. Sessao paga ativa.")
+        st.success(f"Pagamento confirmado. Sessao paga ativa. Creditos: {data['credits_remaining']}.")
     except Exception as e:
         st.error(f"Erro ao confirmar pagamento: {e}")
 
@@ -225,16 +271,31 @@ with st.sidebar:
         horizontal=True,
     )
     sync_output_language(selected_language_label)
+    st.markdown("---")
+    st.subheader("Sessao e creditos")
+    session_title, session_description = session_state_label()
     if SERVER_OWNER_TOKEN:
-        st.success("Modo owner ativo.")
+        st.success(session_title)
+    elif st.session_state.backend_session_token and (st.session_state.credits_remaining or 0) > 0:
+        st.success(session_title)
     elif st.session_state.backend_session_token:
-        st.success(f"Sessao paga ativa. Creditos: {st.session_state.credits_remaining}")
-        if st.session_state.paid_email:
-            st.caption(st.session_state.paid_email)
+        st.warning(session_title)
     else:
-        st.info("Sem sessao ativa.")
+        st.info(session_title)
+    st.caption(session_description)
+    if st.session_state.paid_email:
+        st.caption(f"Email: {st.session_state.paid_email}")
+    if st.session_state.session_status_message:
+        st.caption(st.session_state.session_status_message)
+
+    if st.session_state.backend_session_token and not SERVER_OWNER_TOKEN:
+        if st.button("Verificar sessao", use_container_width=True, key="sidebar_refresh_session"):
+            refresh_paid_session_status()
+            st.rerun()
+
+    if not st.session_state.backend_session_token:
         st.session_state.login_email = st.text_input(
-            "Email",
+            "Email para checkout",
             value=st.session_state.login_email,
             placeholder="teu@email.com",
         )
@@ -251,6 +312,19 @@ with st.sidebar:
         if st.button(f"Comprar 10 creditos — {price_label}", use_container_width=True, key="sidebar_buy_credits"):
             try:
                 start_checkout(st.session_state.login_email)
+            except Exception as e:
+                st.error(f"Erro ao criar checkout: {e}")
+        if st.session_state.checkout_url:
+            st.markdown(
+                f'<a href="{esc(st.session_state.checkout_url)}" target="_blank" rel="noopener noreferrer">Abrir Stripe Checkout</a>',
+                unsafe_allow_html=True,
+            )
+    else:
+        checkout_email = st.session_state.paid_email or st.session_state.login_email
+        price_label = f"{PRICE_AMOUNT_CENTS / 100:.2f} {PRICE_CURRENCY}"
+        if st.button(f"Comprar mais 10 creditos — {price_label}", use_container_width=True, key="sidebar_buy_more_credits"):
+            try:
+                start_checkout(checkout_email)
             except Exception as e:
                 st.error(f"Erro ao criar checkout: {e}")
         if st.session_state.checkout_url:

@@ -61,6 +61,17 @@ streamlit run app.py
 
 The Streamlit sidebar defaults to `http://127.0.0.1:8000` for the backend API.
 
+## Local Demo Checklist
+
+1. Start FastAPI and Streamlit.
+2. Paste a CV and job description to run the free ATS preview.
+3. Choose the CV output language: `English` or `Português`.
+4. Enter an email in the sidebar and click **Comprar 10 creditos**.
+5. Complete Stripe Checkout and return to Streamlit with `session_token={CHECKOUT_SESSION_ID}`.
+6. Streamlit calls `POST /api/billing/exchange-session`, stores the paid session token, and shows the active email plus remaining credits.
+7. Use **Verificar sessao** in the sidebar to refresh `/api/session/status` if needed.
+8. Generate the optimized Markdown CV and export the Harvard PDF.
+
 ## Owner Flow
 
 1. Enter the server `OWNER_TOKEN` in the Streamlit sidebar.
@@ -83,6 +94,8 @@ Recommended production flow:
 6. Paid ATS/PDF endpoints require the token; `POST /api/optimize` consumes one credit.
 
 `POST /api/auth/login` is disabled by default because it creates a session from an email without proving ownership of that inbox. Enable it only for local development/demo by setting `ENABLE_UNVERIFIED_EMAIL_LOGIN=true`.
+
+The Streamlit sidebar shows the current session state, email, credit balance, and a **Verificar sessao** action backed by `POST /api/session/status`.
 
 For local Stripe webhooks:
 
