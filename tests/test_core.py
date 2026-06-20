@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api import auth, billing
+from api import auth, billing, main as api_main
 from api.db import get_db
 from api.main import app
 from api.db import Base
@@ -83,6 +83,8 @@ def test_optimizer_prompt_rules_are_preserved():
     assert "NEVER invent employers, dates, degrees, certifications, or tools" in sys_prompt
     assert "Output ONLY clean Markdown starting with '# Full Name'" in sys_prompt
     assert "Original resume:\nOriginal CV" in user_prompt
+    assert "Output language:" in user_prompt
+    assert "English" in user_prompt
 
 
 def test_optimizer_accepts_optional_agent_review():
@@ -100,6 +102,70 @@ def test_optimizer_accepts_optional_agent_review():
     )
     assert "Agent review guidance" in user_prompt
     assert "Keep the rewrite truthful" in user_prompt
+
+
+def test_optimizer_prompt_accepts_portuguese_language():
+    _, user_prompt = build_optimize_prompts(
+        "Original CV",
+        "Python job",
+        {"overall_score": 50, "keywords_missing": ["python"], "next_steps": []},
+        {"q1": "N/A", "q2": "N/A", "q3": "N/A"},
+        language="pt",
+    )
+    assert "Portuguese" in user_prompt
+    assert "RESUMO" in user_prompt
+    assert "COMPETÊNCIAS" in user_prompt
+
+
+def test_optimize_endpoint_accepts_language_and_defaults_to_english(client_and_db, monkeypatch):
+    client, _ = client_and_db
+    captured = []
+
+    class DummyClient:
+        def generate_text(self, user_prompt, system_instruction=None, temperature=0.2, max_output_tokens=8192):
+            captured.append(user_prompt)
+            return "# Full Name\n## SUMMARY\n- Optimized"
+
+    monkeypatch.setattr(auth.config, "OWNER_TOKEN", "secret")
+    monkeypatch.setattr(api_main, "client_for_tier", lambda tier: DummyClient())
+
+    base_payload = {
+        "owner_token": "secret",
+        "cv": "Original CV",
+        "job": "Python job",
+        "ats": {"overall_score": 50, "keywords_missing": [], "next_steps": []},
+        "context": {"q1": "N/A", "q2": "N/A", "q3": "N/A"},
+    }
+
+    en_response = client.post("/api/optimize", json={**base_payload, "language": "en"})
+    pt_response = client.post("/api/optimize", json={**base_payload, "language": "pt"})
+    default_response = client.post("/api/optimize", json=base_payload)
+
+    assert en_response.status_code == 200
+    assert pt_response.status_code == 200
+    assert default_response.status_code == 200
+    assert "English" in captured[0]
+    assert "Portuguese" in captured[1]
+    assert "English" in captured[2]
+
+
+def test_optimize_endpoint_rejects_invalid_language(client_and_db, monkeypatch):
+    client, _ = client_and_db
+    monkeypatch.setattr(auth.config, "OWNER_TOKEN", "secret")
+
+    response = client.post(
+        "/api/optimize",
+        json={
+            "owner_token": "secret",
+            "cv": "Original CV",
+            "job": "Python job",
+            "ats": {"overall_score": 50, "keywords_missing": [], "next_steps": []},
+            "context": {"q1": "N/A", "q2": "N/A", "q3": "N/A"},
+            "language": "fr",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_agent_review_deterministic_shape():
@@ -158,6 +224,23 @@ def test_paid_token_validation_and_credit_consumption():
 def test_pdf_generation_returns_pdf_bytes():
     pdf = convert_markdown_to_harvard_pdf("# Full Name\nemail@example.com\n## SKILLS\n- Python")
     assert pdf.startswith(b"%PDF")
+
+
+def test_generate_cv_endpoint_accepts_language(client_and_db, monkeypatch):
+    client, _ = client_and_db
+    monkeypatch.setattr(auth.config, "OWNER_TOKEN", "secret")
+
+    response = client.post(
+        "/api/generate-cv",
+        json={
+            "owner_token": "secret",
+            "markdown": "# Nome Completo\nemail@example.com\n## COMPETÊNCIAS\n- Python",
+            "language": "pt",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pdf_base64"]
 
 
 def test_pdf_contact_fields_preserve_phone_email_and_address():

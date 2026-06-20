@@ -41,6 +41,7 @@ export function Step4Result({
   const canCheckout = data.paidEmail.includes("@");
   const agentReview = data.agentReview;
   const hasAgentConsensus = Boolean(agentReview);
+  const languageLabel = data.outputLanguage === "pt" ? "Português" : "English";
 
   function downloadMarkdown() {
     const blob = new Blob([data.optimizedMarkdown], { type: "text/markdown" });
@@ -97,6 +98,9 @@ export function Step4Result({
 
         <div className="rounded-xl border border-tan bg-paper p-5 paper-shadow">
           <div className="section-badge">Resumo</div>
+          <div className="mt-3 rounded-lg border border-oxblood/20 bg-oxblood/5 px-3 py-2 text-sm text-oxblood">
+            CV language: {languageLabel}
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <SummaryItem
               label="ATS Score"

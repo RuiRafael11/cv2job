@@ -10,6 +10,10 @@ type Step1ContextProps = {
 };
 
 const RESPONSE_OPTIONS = ["Quase nunca", "As vezes", "Com frequencia"];
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "pt", label: "Português" },
+] as const;
 
 export function Step1Context({ data, onChange, onNext }: Step1ContextProps) {
   const canContinue = data.responseRate && data.jobDescription.trim().length >= 40;
@@ -67,6 +71,26 @@ export function Step1Context({ data, onChange, onNext }: Step1ContextProps) {
           className="mt-3 h-12 w-full rounded-lg border border-tan-dark bg-bone px-4 text-sm text-ink outline-none transition-colors placeholder:text-stone-500 focus:border-oxblood"
           placeholder="Ex.: Backend Developer, Data Analyst, Product Manager"
         />
+
+        <label className="mt-5 block font-mono-badge text-[11px] tracking-[0.18em] text-stone-500 uppercase">
+          CV language
+        </label>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {LANGUAGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange({ outputLanguage: option.value })}
+              className={`min-h-12 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                data.outputLanguage === option.value
+                  ? "border-oxblood bg-oxblood text-paper"
+                  : "border-tan-dark bg-bone text-ink hover:border-oxblood hover:text-oxblood"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
         <div className="mt-5 rounded-lg border border-tan bg-bone p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-ink">

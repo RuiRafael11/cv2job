@@ -34,6 +34,7 @@ const INITIAL_DATA: WizardData = {
   paidSessionToken: "",
   accessToken: "",
   accessTokenType: "owner",
+  outputLanguage: "en",
 };
 
 export default function AppPage() {
@@ -128,12 +129,18 @@ export default function AppPage() {
 
   function updateData(patch: Partial<WizardData>) {
     setData((current) => ({ ...current, ...patch }));
-    if ("cvText" in patch || "jobDescription" in patch || "responseRate" in patch || "targetRole" in patch) {
+    if (
+      "cvText" in patch ||
+      "jobDescription" in patch ||
+      "responseRate" in patch ||
+      "targetRole" in patch ||
+      "outputLanguage" in patch
+    ) {
       setData((current) => ({
         ...current,
-        ats: null,
-        agentReview: null,
-        agentReviewError: "",
+        ats: "outputLanguage" in patch ? current.ats : null,
+        agentReview: "outputLanguage" in patch ? current.agentReview : null,
+        agentReviewError: "outputLanguage" in patch ? current.agentReviewError : "",
         optimizedMarkdown: "",
       }));
       setPdfBase64(null);
@@ -211,6 +218,7 @@ export default function AppPage() {
           job: data.jobDescription,
           ats: data.ats,
           context,
+          language: data.outputLanguage,
           ...(data.agentReview ? { agent_review: data.agentReview } : {}),
         },
         auth,
@@ -262,7 +270,7 @@ export default function AppPage() {
     setPdfLoading(true);
     setError("");
     try {
-      const response = await generateCvPdf(data.optimizedMarkdown, auth);
+      const response = await generateCvPdf(data.optimizedMarkdown, data.outputLanguage, auth);
       setPdfBase64(response.pdf_base64);
       return response.pdf_base64;
     } catch (err) {

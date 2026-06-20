@@ -1,4 +1,4 @@
-import type { AgentReviewResponse, AtsScoreResponse, WizardContext } from "@/lib/api";
+import type { AgentReviewResponse, AtsScoreResponse, OutputLanguage, WizardContext } from "@/lib/api";
 
 export type WizardData = {
   responseRate: string;
@@ -15,6 +15,7 @@ export type WizardData = {
   paidSessionToken: string;
   accessToken: string;
   accessTokenType: "owner" | "paid";
+  outputLanguage: OutputLanguage;
 };
 
 export function toWizardContext(data: WizardData): WizardContext {

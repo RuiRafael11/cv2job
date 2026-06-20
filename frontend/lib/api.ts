@@ -11,6 +11,8 @@ export type AuthTokens = {
   sessionToken?: string;
 };
 
+export type OutputLanguage = "en" | "pt";
+
 export type AtsScoreRequest = {
   cv: string;
   job: string;
@@ -41,6 +43,7 @@ export type OptimizeRequest = {
   job: string;
   ats: AtsScoreResponse;
   context: WizardContext;
+  language?: OutputLanguage;
   agent_review?: AgentReviewResponse;
 };
 
@@ -141,8 +144,8 @@ export function optimizeCv(payload: OptimizeRequest, auth: AuthTokens) {
   return requestJson<OptimizeResponse>("/api/optimize", payload, auth);
 }
 
-export function generateCvPdf(markdown: string, auth: AuthTokens) {
-  return requestJson<GenerateCvResponse>("/api/generate-cv", { markdown }, auth);
+export function generateCvPdf(markdown: string, language: OutputLanguage, auth: AuthTokens) {
+  return requestJson<GenerateCvResponse>("/api/generate-cv", { markdown, language }, auth);
 }
 
 export function createCheckout(email: string, currentUrl: string) {

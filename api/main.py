@@ -166,6 +166,7 @@ def optimize(payload: OptimizeRequest, request: Request, db: Session = Depends(g
             payload.ats,
             payload.context.dict(),
             payload.agent_review,
+            payload.language,
         )
         markdown = client_for_tier(actor.tier).generate_text(
             user_prompt,

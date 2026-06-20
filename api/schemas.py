@@ -1,6 +1,9 @@
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+OutputLanguage = Literal["en", "pt"]
 
 
 class WizardContext(BaseModel):
@@ -25,6 +28,10 @@ class OptimizeRequest(AuthenticatedRequest):
     job: str
     ats: dict[str, Any]
     context: WizardContext
+    language: OutputLanguage = Field(
+        default="en",
+        description="Output language for the optimized CV. Supported values: en, pt.",
+    )
     agent_review: dict[str, Any] | None = None
 
 
@@ -55,6 +62,10 @@ class AgentReviewResponse(BaseModel):
 
 class GenerateCvRequest(AuthenticatedRequest):
     markdown: str
+    language: OutputLanguage = Field(
+        default="en",
+        description="Language of the optimized CV markdown. Supported values: en, pt.",
+    )
 
 
 class OptimizeResponse(BaseModel):
